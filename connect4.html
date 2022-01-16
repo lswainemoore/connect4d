@@ -161,7 +161,7 @@
             }
 
             // check win, diagonally down/right
-            if (i <= dim - toWin && j >= toWin) {
+            if (i <= dim - toWin && j >= toWin - 1) {
               var works = true
               for (var k = 1; k < toWin; k++) {
                 if (this.slots[i + k][j - k] != piece) {
@@ -232,39 +232,43 @@
     }
 
     class MinMaxPlayer extends Player {
-      heuristicValue(board) {
+      heuristicValue(board, moveSequence) {
         // not implemented
       }
 
       chooseMove(board, turnNum) {
-        const maxDepth = 5
+        const maxDepth = 7
 
         var that = this
-        function moveValuer(currentBoard, currentTurnNum, depthLeft) {
-          var spin = currentTurnNum % 2 == (turnNum) % 2 ? 1 : -1
+        function moveValuer(currentBoard, currentTurnNum, moveSequence) {
+          var spin = currentTurnNum % 2 == turnNum % 2 ? 1 : -1
 
-          const logSpacing = '  '.repeat(maxDepth - depthLeft)
+          const logSpacing = '  '.repeat(moveSequence.length)
 
           var bestValue = null
           var goodMoves
           for (const possibleMove of currentBoard.availableColumns()) {
             // console.log(logSpacing + `considering the value of player ${currentTurnNum % 2 + 1} doing ${possibleMove} on turn ${currentTurnNum}...`)
 
+            const newMoveSequence = [...moveSequence]
+            newMoveSequence.push(possibleMove)
             const moveBoard = currentBoard.clone()
             moveBoard.placePiece(possibleMove, currentTurnNum % 2 + 1)
 
+
             var value
-            if (depthLeft == 0 || moveBoard.hasVictory()) {
-              value = spin * that.heuristicValue(moveBoard)
+            if (newMoveSequence.length >= maxDepth || moveBoard.hasVictory()) {
+              value = spin * that.heuristicValue(moveBoard, newMoveSequence)
               // console.log(logSpacing + `leaf node has value ${value}`)
             }
             else {
-              let { bestValue } = moveValuer(moveBoard, currentTurnNum + 1, depthLeft - 1)
+              let { bestValue } = moveValuer(moveBoard, currentTurnNum + 1, newMoveSequence)
               value = bestValue
               // console.log(logSpacing + `non-leaf node has value ${value}`)
 
             }
 
+            // todo these two can probably be combined more elegantly using spin
             if (spin == 1) {
               // console.log(logSpacing + 'it\'s our turn so maximizing...')
               if (bestValue == null || value > bestValue) {
@@ -291,17 +295,29 @@
           return { bestValue, goodMoves }
         }
 
-        let { bestValue, goodMoves } = moveValuer(board, turnNum, maxDepth)
-        console.log(`ultimately choosing random from ${goodMoves} (value: ${bestValue})`)
-        console.log('\n\n\n\n\n')
+        let { bestValue, goodMoves } = moveValuer(board, turnNum, [])
+        // console.log(`ultimately choosing random from ${goodMoves} (value: ${bestValue})`)
+        // console.log('\n\n\n\n\n')
         return randomChoice(goodMoves)
       }
     }
 
     class LossAvoider extends MinMaxPlayer {
-      heuristicValue(board) {
+      heuristicValue(board, moveSequence) {
         if (board.hasVictory()) {
           return 100
+        }
+        return 0
+      }
+    }
+
+
+    class SoonerLossAvoider extends MinMaxPlayer {
+      heuristicValue(board, moveSequence) {
+        if (board.hasVictory()) {
+          // make future victories slightly less appealing,
+          // and future losses slightly less appalling
+          return 100 * Math.pow(.99, moveSequence.length - 1)
         }
         return 0
       }
@@ -331,13 +347,34 @@
         if (move != -1) {
           this.play(move)
         }
+        else {
+          this.enableButtons()
+        }
+      }
+
+      getButtons() {
+        return document.querySelectorAll('button')
+      }
+
+      enableButtons() {
+        this.getButtons().forEach(function(button) {
+          button.disabled = false;
+        })
+      }
+
+      disableButtons() {
+        this.getButtons().forEach(function(button) {
+          button.disabled = true;
+        })
       }
 
       whoseTurn() {
         return this.turnNum % 2 + 1
       }
 
-      play(col) {
+      async play(col) {
+        this.disableButtons()
+
         if (this.completed) {
           return
         }
@@ -360,6 +397,8 @@
           else {
             this.turnNum += 1
             this.setTurnMessage()
+            // this makes convas/message get updated before we do the meaty stuff. :shrug:
+            await new Promise(r => setTimeout(r, .01));
             this.requestMove()
           }
         } else {
@@ -385,7 +424,7 @@
 
     const game = new Game(
       new HumanPlayer(),
-      new LossAvoider(),
+      new SoonerLossAvoider(),
     )
     game.start()
   </script>
