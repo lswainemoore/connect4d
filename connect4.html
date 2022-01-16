@@ -5,18 +5,49 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="description" content="" />
+  <style>
+    #message {
+      font-size: 50px;
+    }
+    #board {
+      margin-top: 20px;
+      border:1px solid #000000;
+      display:block
+    }
+    .buttons {
+      /*removes space between*/
+      font-size: 0;
+    }
+    .buttons > .button {
+      width: 100px;
+      display: inline-block;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    .buttons > .button > button {
+      width: 75%;
+      background: 0;
+      margin-top: 10px;
+      border-radius: 5px;
+      padding: 7px;
+      margin-left: 4px;
+    }
+  </style>
 </head>
 <body>
   <div id="message"></div>
-  <canvas id="board" width="800" height="800" style="border:1px solid #000000;"></canvas>
-  <button onclick="game.play(0)">x</button>
-  <button onclick="game.play(1)">x</button>
-  <button onclick="game.play(2)">x</button>
-  <button onclick="game.play(3)">x</button>
-  <button onclick="game.play(4)">x</button>
-  <button onclick="game.play(5)">x</button>
-  <button onclick="game.play(6)">x</button>
-  <button onclick="game.play(7)">x</button>
+  <canvas id="board" width="800" height="800"></canvas>
+  <div class="buttons">
+    <div class="button"><button onclick="game.play(0)">x</button></div>
+    <div class="button"><button onclick="game.play(1)">x</button></div>
+    <div class="button"><button onclick="game.play(2)">x</button></div>
+    <div class="button"><button onclick="game.play(3)">x</button></div>
+    <div class="button"><button onclick="game.play(4)">x</button></div>
+    <div class="button"><button onclick="game.play(5)">x</button></div>
+    <div class="button"><button onclick="game.play(6)">x</button></div>
+    <div class="button"><button onclick="game.play(7)">x</button></div>
+  </div>
   <script type="text/javascript">
     var canvas = document.getElementById('board')
     var messageArea = document.getElementById('message')
@@ -206,66 +237,62 @@
       }
 
       chooseMove(board, turnNum) {
-        const maxDepth = 3
+        const maxDepth = 5
 
+        var that = this
         function moveValuer(currentBoard, currentTurnNum, depthLeft) {
-          // are we maximizing or minimizing?
-          var spin = currentTurnNum % 2 == turnNum % 2 ? -1 : 1
+          var spin = currentTurnNum % 2 == (turnNum) % 2 ? 1 : -1
 
-          if (depthLeft == 0) {
-            // this is supposed to be elsewhere but just for now...
-            var val
-            if (currentBoard.hasVictory() != 0) {
-              val = 100
-            }
-            else {
-              val = 0
-            }
-            console.log(' ' + '  '.repeat(maxDepth - depthLeft) + `leaf (turn: ${currentTurnNum}; spin: ${spin}) has value: ${val}`)
-            // todo consider
-            // return spin * this.heuristicValue(currentBoard)
-            return spin * val
-          }
-          else if (currentBoard.hasVictory()) {
-            return spin * 100
-          }
-          var maxValue = -Infinity
+          const logSpacing = '  '.repeat(maxDepth - depthLeft)
+
+          var bestValue = null
+          var goodMoves
           for (const possibleMove of currentBoard.availableColumns()) {
+            // console.log(logSpacing + `considering the value of player ${currentTurnNum % 2 + 1} doing ${possibleMove} on turn ${currentTurnNum}...`)
+
             const moveBoard = currentBoard.clone()
             moveBoard.placePiece(possibleMove, currentTurnNum % 2 + 1)
-            // todo consider
-            console.log(' ' + '  '.repeat(maxDepth - depthLeft) + `considering the value of ${possibleMove} on turn ${currentTurnNum}...`)
-            const value = -1 * spin * moveValuer(moveBoard, currentTurnNum + 1, depthLeft - 1)
-            console.log(' ' + '  '.repeat(maxDepth - depthLeft) + `the value of ${possibleMove} on turn ${currentTurnNum} was ${value}`)
 
-            if (value > maxValue) {
-              maxValue = value
+            var value
+            if (depthLeft == 0 || moveBoard.hasVictory()) {
+              value = spin * that.heuristicValue(moveBoard)
+              // console.log(logSpacing + `leaf node has value ${value}`)
+            }
+            else {
+              let { bestValue } = moveValuer(moveBoard, currentTurnNum + 1, depthLeft - 1)
+              value = bestValue
+              // console.log(logSpacing + `non-leaf node has value ${value}`)
+
             }
 
+            if (spin == 1) {
+              // console.log(logSpacing + 'it\'s our turn so maximizing...')
+              if (bestValue == null || value > bestValue) {
+                bestValue = value
+                goodMoves = [possibleMove]
+              }
+              else if (value == bestValue) {
+                goodMoves.push(possibleMove)
+              }
+            }
+            else {
+              // console.log(logSpacing + 'it\'s opponent\'s turn so minimizing...')
+              if (bestValue == null || value < bestValue) {
+                bestValue = value
+                goodMoves = [possibleMove]
+              }
+              else if (value == bestValue) {
+                goodMoves.push(possibleMove)
+              }
+            }
           }
-          return maxValue
+
+          // console.log(logSpacing + `the best moves for ${ spin == 1 ? 'us' : 'our opponent' } are ${goodMoves} with value ${bestValue}`)
+          return { bestValue, goodMoves }
         }
 
-        // todo this is seeming redundant...
-        const possibleMoves = board.availableColumns()
-        var maxValue = -Infinity
-        var goodMoves
-        for (const possibleMove of possibleMoves) {
-          const moveBoard = board.clone()
-          moveBoard.placePiece(possibleMove, turnNum % 2 + 1)
-          console.log(`exploring value of doing ${possibleMove} at turn ${turnNum}...`)
-          const value = -1 * moveValuer(moveBoard, turnNum + 1, maxDepth)
-          console.log(`doing ${possibleMove} has value ${value}`)
-          if (value > maxValue) {
-            maxValue = value
-            goodMoves = [possibleMove]
-          }
-          else if (value == maxValue) {
-            goodMoves.push(possibleMove)
-          }
-        }
-
-        console.log(goodMoves)
+        let { bestValue, goodMoves } = moveValuer(board, turnNum, maxDepth)
+        console.log(`ultimately choosing random from ${goodMoves} (value: ${bestValue})`)
         console.log('\n\n\n\n\n')
         return randomChoice(goodMoves)
       }
@@ -352,7 +379,7 @@
       }
 
       setTurnMessage() {
-        this.setMessage(`${ this.sideToStr(this.whoseTurn()) }'s turn`)
+        this.setMessage(`${ this.sideToStr(this.whoseTurn()) }'s turn (${this.turnNum})`)
       }
     }
 
