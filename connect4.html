@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>tk</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="" />
+</head>
+<body>
+  <div id="message"></div>
+  <canvas id="board" width="800" height="800" style="border:1px solid #000000;"></canvas>
+  <button onclick="game.play(0)">x</button>
+  <button onclick="game.play(1)">x</button>
+  <button onclick="game.play(2)">x</button>
+  <button onclick="game.play(3)">x</button>
+  <button onclick="game.play(4)">x</button>
+  <button onclick="game.play(5)">x</button>
+  <button onclick="game.play(6)">x</button>
+  <button onclick="game.play(7)">x</button>
+  <script type="text/javascript">
+    var canvas = document.getElementById('board')
+    var messageArea = document.getElementById('message')
+    var w = 800
+    var dim = 8
+    var toWin = 4
+
+    class Board {
+      constructor() {
+        this.slots = []
+        for (var i = 0; i < dim; i++) {
+          this.slots.push([])
+          for (var j = 0; j < dim; j++) {
+            this.slots[i].push(0)
+          }
+        }
+      }
+
+      clone() {
+        const board = new Board()
+        for (var i = 0; i < dim; i++) {
+          for (var j = 0; j < dim; j++) {
+            board.slots[i][j] = this.slots[i][j]
+          }
+        }
+        return board
+      }
+
+      placePiece(col, side) {
+        // return the height at which it got played,
+        // which may help expedite search for victories.
+        // or -1 if it's not a valid move.
+        for (var i = 0; i < dim; i++) {
+          if (!this.slots[col][i]) {
+            this.slots[col][i] = side
+            return i
+          }
+        }
+        return -1
+      }
+
+      availableColumns() {
+        var availableColumns = []
+        for (var i = 0; i < dim; i++) {
+          if (!this.slots[i][dim - 1]) {
+            availableColumns.push(i)
+          }
+        }
+        return availableColumns
+      }
+
+      hasVictory() {
+        // returns 0 if no victory
+        // side of victory if has one.
+        // really, caller should know who won based on who played last
+        // but doesn't hurt to be explicit
+
+
+        // not very efficient...
+
+        // we'll start our search at bottom left, and proceed up then right.
+        // that way, we can basically always assume that if we're looking at a
+        // point, it wasn't part of a win that began from below or to the left.
+        for (var i = 0; i < dim; i++) {
+          for (var j = 0; j < dim; j++) {
+            const piece = this.slots[i][j]
+            if (!piece) {
+              continue
+            }
+
+            // check win to the right
+            if (i <= dim - toWin) {
+              var works = true
+              for (var k = 1; k < toWin; k++) {
+                if (this.slots[i + k][j] != piece) {
+                  works = false
+                  break
+                }
+              }
+              if (works) {
+                return piece
+              }
+            }
+
+            // check win to above
+            if (j <= dim - toWin) {
+              var works = true
+              for (var k = 1; k < toWin; k++) {
+                if (this.slots[i][j + k] != piece) {
+                  works = false
+                  break
+                }
+              }
+              if (works) {
+                return piece
+              }
+            }
+
+            // check win, diagonally up/right
+            if (i <= dim - toWin && j <= dim - toWin) {
+              var works = true
+              for (var k = 1; k < toWin; k++) {
+                if (this.slots[i + k][j + k] != piece) {
+                  works = false
+                  break
+                }
+              }
+              if (works) {
+                return piece
+              }
+            }
+
+            // check win, diagonally down/right
+            if (i <= dim - toWin && j >= toWin) {
+              var works = true
+              for (var k = 1; k < toWin; k++) {
+                if (this.slots[i + k][j - k] != piece) {
+                  works = false
+                  break
+                }
+              }
+              if (works) {
+                return piece
+              }
+            }
+          }
+        }
+
+        return 0
+      }
+
+      draw() {
+        var ctx = canvas.getContext("2d")
+        ctx.clearRect(0, 0, w, w)
+        for (var i = 0; i < dim; i++) {
+          for (var j = 0; j < dim; j++) {
+            ctx.moveTo(w / dim * i, 0)
+            ctx.lineTo(w / dim * i, w)
+            ctx.stroke()
+            ctx.moveTo(0, w / dim * j)
+            ctx.lineTo(w, w / dim * j)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(w / dim * (i + .5), w - w / dim * (j + .5), w / dim * .4, 0, 2 * Math.PI)
+            const piece = (this.slots[i][j])
+            if (piece) {
+              ctx.fillStyle = {
+                1: 'red',
+                2: 'blue',
+              }[piece]
+              ctx.fill()
+            }
+            else {
+              ctx.stroke()
+            }
+          }
+        }
+      }
+    }
+
+
+    class Player {
+      chooseMove(board, turnNum) {
+        // unimplemented
+        return -1
+      }
+    }
+
+    function randomChoice(arr) {
+      return arr[Math.floor(Math.random() * arr.length)]
+    }
+
+    class HumanPlayer extends Player {
+
+    }
+
+    class RandomPlayer extends Player {
+      chooseMove(board, turnNum) {
+        const possibleMoves = board.availableColumns()
+        return randomChoice(possibleMoves)
+      }
+    }
+
+    class MinMaxPlayer extends Player {
+      heuristicValue(board) {
+        // not implemented
+      }
+
+      chooseMove(board, turnNum) {
+        const maxDepth = 3
+
+        function moveValuer(currentBoard, currentTurnNum, depthLeft) {
+          // are we maximizing or minimizing?
+          var spin = currentTurnNum % 2 == turnNum % 2 ? -1 : 1
+
+          if (depthLeft == 0) {
+            // this is supposed to be elsewhere but just for now...
+            var val
+            if (currentBoard.hasVictory() != 0) {
+              val = 100
+            }
+            else {
+              val = 0
+            }
+            console.log(' ' + '  '.repeat(maxDepth - depthLeft) + `leaf (turn: ${currentTurnNum}; spin: ${spin}) has value: ${val}`)
+            // todo consider
+            // return spin * this.heuristicValue(currentBoard)
+            return spin * val
+          }
+          else if (currentBoard.hasVictory()) {
+            return spin * 100
+          }
+          var maxValue = -Infinity
+          for (const possibleMove of currentBoard.availableColumns()) {
+            const moveBoard = currentBoard.clone()
+            moveBoard.placePiece(possibleMove, currentTurnNum % 2 + 1)
+            // todo consider
+            console.log(' ' + '  '.repeat(maxDepth - depthLeft) + `considering the value of ${possibleMove} on turn ${currentTurnNum}...`)
+            const value = -1 * spin * moveValuer(moveBoard, currentTurnNum + 1, depthLeft - 1)
+            console.log(' ' + '  '.repeat(maxDepth - depthLeft) + `the value of ${possibleMove} on turn ${currentTurnNum} was ${value}`)
+
+            if (value > maxValue) {
+              maxValue = value
+            }
+
+          }
+          return maxValue
+        }
+
+        // todo this is seeming redundant...
+        const possibleMoves = board.availableColumns()
+        var maxValue = -Infinity
+        var goodMoves
+        for (const possibleMove of possibleMoves) {
+          const moveBoard = board.clone()
+          moveBoard.placePiece(possibleMove, turnNum % 2 + 1)
+          console.log(`exploring value of doing ${possibleMove} at turn ${turnNum}...`)
+          const value = -1 * moveValuer(moveBoard, turnNum + 1, maxDepth)
+          console.log(`doing ${possibleMove} has value ${value}`)
+          if (value > maxValue) {
+            maxValue = value
+            goodMoves = [possibleMove]
+          }
+          else if (value == maxValue) {
+            goodMoves.push(possibleMove)
+          }
+        }
+
+        console.log(goodMoves)
+        console.log('\n\n\n\n\n')
+        return randomChoice(goodMoves)
+      }
+    }
+
+    class LossAvoider extends MinMaxPlayer {
+      heuristicValue(board) {
+        if (board.hasVictory()) {
+          return 100
+        }
+        return 0
+      }
+    }
+
+    class Game {
+      constructor(player1, player2) {
+        this.players = {
+          1: player1,
+          2: player2,
+        }
+
+        this.turnNum = 0
+        this.completed = false
+        this.board = new Board()
+        this.board.draw()
+        this.setTurnMessage()
+      }
+
+      start() {
+        this.requestMove()
+      }
+
+      requestMove() {
+        const move = this.players[this.whoseTurn()].chooseMove(this.board, this.turnNum)
+        // console.log('chose ', move)
+        if (move != -1) {
+          this.play(move)
+        }
+      }
+
+      whoseTurn() {
+        return this.turnNum % 2 + 1
+      }
+
+      play(col) {
+        if (this.completed) {
+          return
+        }
+
+        var result = this.board.placePiece(col, this.whoseTurn())
+        if (result != -1) {
+          this.board.draw()
+
+          const v = this.board.hasVictory()
+          if (v) {
+            this.completed = true
+            this.setMessage(`victory for ${ this.sideToStr(v) }`)
+          }
+
+          else if (this.board.availableColumns().length == 0) {
+            this.completed = true
+            this.setMessage('game is drawn!')
+          }
+
+          else {
+            this.turnNum += 1
+            this.setTurnMessage()
+            this.requestMove()
+          }
+        } else {
+          this.setMessage('invalid move')
+        }
+      }
+
+      sideToStr(side) {
+        return {
+          1: 'red',
+          2: 'blue'
+        }[side]
+      }
+
+      setMessage(content) {
+        message.innerHTML = content
+      }
+
+      setTurnMessage() {
+        this.setMessage(`${ this.sideToStr(this.whoseTurn()) }'s turn`)
+      }
+    }
+
+    const game = new Game(
+      new HumanPlayer(),
+      new LossAvoider(),
+    )
+    game.start()
+  </script>
+</body>
+</html>
