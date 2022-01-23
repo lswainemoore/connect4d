@@ -1,0 +1,4 @@
+- better parameterization
+	- relationship between width and height of canvass, in js, and of button should be tighter.
+- make 3d!
+- make 4d!
