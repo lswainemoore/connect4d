@@ -1,4 +1,5 @@
 - better parameterization
 	- relationship between width and height of canvass, in js, and of button should be tighter.
+- alpha beta pruning
 - make 3d!
 - make 4d!
